@@ -1,0 +1,44 @@
+transformer:
+  encoder_layer: 4
+  encoder_head: 2
+  encoder_hidden: 192
+  conv_filter_size: 768
+  conv_kernel_size: 5
+  # encoder_dropout: 0.2
+  encoder_window_size: 4
+
+variational_generator:
+  encoder_layer: 8
+  decoder_layer: 4
+  conv_kernel_size: 5
+  conv_stride_size: 4
+  encoder_decoder_hidden: 192
+  # encoder_decoder_dropout: 0.2
+  latent_hidden: 16
+  vp_flow_layer: 4
+  vp_flow_hidden: 64
+  vp_flow_kernel: 3
+
+postnet:
+  wn_layer: 3
+  wn_kernel_size: 3
+  wn_hidden: 192
+  flow_step: 12
+  flow_dropout: 0.05
+  shared_group: 3
+  n_split: 4
+  n_sqz: 2
+  sigmoid_scale: False
+
+variance_predictor:
+  filter_size: 192
+  kernel_size: 3
+  dropout: 0.5
+
+multi_speaker: False
+
+max_seq_len: 1000
+
+vocoder:
+  model: "HiFi-GAN" # support 'HiFi-GAN', 'MelGAN'
+  speaker: "LJSpeech" # support  'LJSpeech', 'universal'
