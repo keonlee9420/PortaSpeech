@@ -18,4 +18,4 @@ tgt == 1.4.4
 torch == 1.7.0
 tqdm==4.46.1
 unidecode == 1.1.1
-pillow == 8.3.1
+pillow == 8.3.2
