@@ -10,7 +10,7 @@ PyTorch Implementation of [PortaSpeech: Portable and High-Quality Generative Tex
 | Module | Normal | Small | Normal (paper) | Small (paper) |
 | :----- | :-----: | :-----: | :-----: | :-----: |
 | *Total* | 34.3M | 9.6M | 21.8M | 6.7M
-| *LinguisticEncoder* | 14M | 3.4M | - | -
+| *LinguisticEncoder* | 14M | 3.5M | - | -
 | *VariationalGenerator* | 11M | 2.8M | - | -
 | *FlowPostNet* | 9.3M | 3.4M | - | -
 
@@ -122,7 +122,6 @@ to serve TensorBoard on your localhost.
 - For vocoder, **HiFi-GAN** and **MelGAN** are supported.
 - Add convolution layer and residual layer in **VariationalGenerator** to match the shape of conditioner and output.
 - No ReLU activation and LayerNorm in **VariationalGenerator** for convergence of word-to-phoneme alignment of **LinguisticEncoder**.
-- Use absolute positional encoding in **LinguisticEncoder** instead of relative positional encoding.
 - Will be extended to a **multi-speaker TTS**.
 <!-- - Two options for embedding for the **multi-speaker TTS** setting: training speaker embedder from scratch or using a pre-trained [philipperemy's DeepSpeaker](https://github.com/philipperemy/deep-speaker) model (as [STYLER](https://github.com/keonlee9420/STYLER) did). You can toggle it by setting the config (between `'none'` and `'DeepSpeaker'`).
 - DeepSpeaker on VCTK dataset shows clear identification among speakers. The following figure shows the T-SNE plot of extracted speaker embedding.

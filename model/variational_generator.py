@@ -173,40 +173,34 @@ class VariationalGenerator(nn.Module):
         h_text_e = self.cond_layer_e(h_text)  # [B, H, L']
         h_text_d = self.cond_layer_d(h_text)  # [B, H, L']
         mel_mask_conv = self.get_conv_mask(
-            mel_len, h_text_f.shape[2], mel_mask)
+            mel_len, h_text_f.shape[2], mel_mask).unsqueeze(-1)
 
         # Encoding
         x = self.enc_conv(mel)
         x = x.contiguous().transpose(1, 2)
-        x = self.enc_wn(x, g=h_text_e).masked_fill(
-            mel_mask_conv.unsqueeze(1), 0.)
+        x = self.enc_wn(x, g=h_text_e) * mel_mask_conv.transpose(1, 2)
         x = x.contiguous().transpose(1, 2)
         x = self.latent_enc_prj(x)
 
         # # Reparameterization
         m_q, logs_q = torch.split(x, self.latent_hidden, dim=-1)
-        m_q, logs_q = m_q.masked_fill(mel_mask_conv.unsqueeze(
-            -1), 0.), logs_q.masked_fill(mel_mask_conv.unsqueeze(-1), 0.)
-        z_q = reparameterize(m_q, logs_q).masked_fill(
-            mel_mask_conv.unsqueeze(-1), 0.)
+        m_q, logs_q = m_q * mel_mask_conv, logs_q * mel_mask_conv
+        z_q = reparameterize(m_q, logs_q) * mel_mask_conv
 
         # Prior VP FLow
-        z_p = self.flow(z_q.transpose(1, 2), x_mask=~
-                        mel_mask_conv.unsqueeze(1), g=h_text_f, reverse=False)
+        z_p = self.flow(z_q.transpose(1, 2), x_mask=mel_mask_conv.transpose(
+            1, 2), g=h_text_f, reverse=False)
 
         # Decoding
         x = self.latent_dec_prj(z_q)
         x = x.contiguous().transpose(1, 2)
-        x = self.dec_wn(x, g=h_text_d).masked_fill(
-            mel_mask_conv.unsqueeze(1), 0.)
+        x = self.dec_wn(x, g=h_text_d) * mel_mask_conv.transpose(1, 2)
         x = x.contiguous().transpose(1, 2)
         mel_res = self.dec_conv(x)
-        mel_res = self.trim_output(mel_res, mel_mask.shape[1])
-        mel_res = mel_res.masked_fill(mel_mask.unsqueeze(-1), 0.)
-        residual = self.residual_layer(
-            mel_res).masked_fill(mel_mask.unsqueeze(-1), 0.)
+        mel_res = self.trim_output(mel_res, mel_mask.shape[1]) * mel_mask.unsqueeze(-1)
+        residual = self.residual_layer(mel_res) * mel_mask.unsqueeze(-1)
 
-        return mel_res, residual, (z_p, logs_q.transpose(1, 2), ~mel_mask_conv.unsqueeze(1))
+        return mel_res, residual, (z_p, logs_q.transpose(1, 2), mel_mask_conv.transpose(1, 2))
 
     def inference(self, mel_len, mel_mask, h_text):
         """
@@ -222,25 +216,22 @@ class VariationalGenerator(nn.Module):
         h_text_f = self.cond_layer_f(h_text)  # [B, H, L']
         h_text_d = self.cond_layer_d(h_text)  # [B, H, L']
         mel_mask_conv = self.get_conv_mask(
-            mel_len, h_text_f.shape[2], mel_mask)
+            mel_len, h_text_f.shape[2], mel_mask).unsqueeze(-1)
 
         # Sample from Prior
         z_n = torch.randn(h_text_f.shape[0], self.latent_hidden,
                           h_text_f.shape[2]).to(device=h_text_f.device, dtype=h_text.dtype)
-        z_q = self.flow(z_n, x_mask=~
-                        mel_mask_conv.unsqueeze(1), g=h_text_f, reverse=True)
+        z_q = self.flow(z_n, x_mask=mel_mask_conv.transpose(
+            1, 2), g=h_text_f, reverse=True)
 
         # Decoding
         x = self.latent_dec_prj(z_q.transpose(1, 2))
         x = x.contiguous().transpose(1, 2)
-        x = self.dec_wn(x, g=h_text_d).masked_fill(
-            mel_mask_conv.unsqueeze(1), 0.)
+        x = self.dec_wn(x, g=h_text_d) * mel_mask_conv.transpose(1, 2)
         x = x.contiguous().transpose(1, 2)
         mel_res = self.dec_conv(x)
-        mel_res = self.trim_output(mel_res, mel_mask.shape[1])
-        mel_res = mel_res.masked_fill(mel_mask.unsqueeze(-1), 0.)
-        residual = self.residual_layer(
-            mel_res).masked_fill(mel_mask.unsqueeze(-1), 0.)
+        mel_res = self.trim_output(mel_res, mel_mask.shape[1]) * mel_mask.unsqueeze(-1)
+        residual = self.residual_layer(mel_res) * mel_mask.unsqueeze(-1)
 
         return mel_res, residual, None
 

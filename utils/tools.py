@@ -137,7 +137,7 @@ def get_mask_from_lengths(lengths, max_len=None):
         0).expand(batch_size, -1).to(lengths.device)
     mask = ids >= lengths.unsqueeze(1).expand(-1, max_len)
 
-    return mask
+    return ~mask
 
 
 def expand(values, durations):
@@ -168,7 +168,7 @@ def synth_one_sample(model, targets, predictions, vocoder, model_config, preproc
 
     # PostNet Inference on the reconstruction
     mel_reconst_pn = model.postnet.inference(
-        ~mel_mask.unsqueeze(1),
+        mel_mask.unsqueeze(1),
         g=(out_residual + residual).transpose(1, 2),
     )[0].float().detach()
 
@@ -179,7 +179,7 @@ def synth_one_sample(model, targets, predictions, vocoder, model_config, preproc
 
     # PostNet Inference on the inference
     mel_prediction_pn = model.postnet.inference(
-        ~mel_mask.unsqueeze(1),
+        mel_mask.unsqueeze(1),
         g=(out_residual + residual).transpose(1, 2),
     )[0].float().detach()
 
@@ -230,7 +230,7 @@ def synth_samples(targets, predictions, vocoder, model_config, preprocess_config
         basename = basenames[i]
         src_len = predictions[6][i].item()
         mel_len = predictions[7][i].item()
-        mel_prediction = predictions[0][i, :mel_len].detach()
+        mel_prediction = predictions[0][i, :, :mel_len].detach()
 
         fig = plot_mel(
             [

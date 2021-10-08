@@ -17,7 +17,7 @@ class PortaSpeech(nn.Module):
         super(PortaSpeech, self).__init__()
         self.model_config = model_config
 
-        self.linguistic_encoder = LinguisticEncoder(model_config, abs_mha=True)
+        self.linguistic_encoder = LinguisticEncoder(model_config)
         self.variational_generator = VariationalGenerator(
             preprocess_config, model_config)
         self.postnet = FlowPostNet(preprocess_config, model_config)
@@ -104,14 +104,14 @@ class PortaSpeech(nn.Module):
                 mels, mel_lens, mel_masks, output)
             postnet_output = self.postnet(
                 mels.transpose(1, 2),
-                ~mel_masks.unsqueeze(1),
+                mel_masks.unsqueeze(1),
                 g=(out_residual + residual).transpose(1, 2),
             )
         else:
             _, out_residual, dist_info = self.variational_generator.inference(
                 mel_lens, mel_masks, output)
             output = self.postnet.inference(
-                ~mel_masks.unsqueeze(1),
+                mel_masks.unsqueeze(1),
                 g=(out_residual + residual).transpose(1, 2),
             )
             postnet_output = None

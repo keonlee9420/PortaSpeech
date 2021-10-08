@@ -62,9 +62,6 @@ class PortaSpeechLoss(nn.Module):
             src_w_masks,
             _,
         ) = predictions
-        src_masks = ~src_masks
-        src_w_masks = ~src_w_masks
-        mel_masks = ~mel_masks
         log_duration_targets = torch.log(duration_roundeds.float() + 1)
         mel_targets = mel_targets[:, : mel_masks.shape[1], :]
         mel_masks = mel_masks[:, :mel_masks.shape[1]]

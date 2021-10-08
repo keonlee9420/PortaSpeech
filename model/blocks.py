@@ -22,6 +22,8 @@ def convert_pad_shape(pad_shape):
 
 
 class Flip(nn.Module):
+    """ Flip Layer """
+
     def forward(self, x, *args, reverse=False, **kwargs):
         x = torch.flip(x, [1])
         if not reverse:
@@ -212,159 +214,9 @@ class ConvTransposeNorm(nn.Module):
         return x
 
 
-class FFTBlock(nn.Module):
-    """ FFT Block with AbsMHA """
-
-    def __init__(self, d_model, n_head, d_k, d_v, d_inner, kernel_size, dropout=0.0):
-        super(FFTBlock, self).__init__()
-        self.slf_attn = MultiHeadAttention(
-            n_head, d_model, d_k, d_v, dropout=dropout)
-        self.pos_ffn = PositionwiseFeedForward(
-            d_model, d_inner, kernel_size, dropout=dropout
-        )
-
-    def forward(self, enc_input, mask=None, slf_attn_mask=None):
-        enc_output, enc_slf_attn = self.slf_attn(
-            enc_input, enc_input, enc_input, mask_1=slf_attn_mask
-        )
-        if mask is not None:
-            enc_output = enc_output.masked_fill(mask.unsqueeze(-1), 0)
-
-        enc_output = self.pos_ffn(enc_output)
-        if mask is not None:
-            enc_output = enc_output.masked_fill(mask.unsqueeze(-1), 0)
-
-        return enc_output, enc_slf_attn
-
-
-class MultiHeadAttention(nn.Module):
-    """ Multi-Head Attention """
-
-    def __init__(self, n_head, d_model, d_k, d_v, dropout=0.0):
-        super(MultiHeadAttention, self).__init__()
-
-        self.n_head = n_head
-        self.d_k = d_k
-        self.d_v = d_v
-
-        self.w_qs = LinearNorm(d_model, n_head * d_k)
-        self.w_ks = LinearNorm(d_model, n_head * d_k)
-        self.w_vs = LinearNorm(d_model, n_head * d_v)
-
-        self.attention = ScaledDotProductAttention(
-            temperature=np.power(d_k, 0.5))
-        self.layer_norm = nn.LayerNorm(d_model)
-
-        self.fc = LinearNorm(n_head * d_v, d_model)
-
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, q, k, v, mask_1=None, mask_2=None, mapping_mask=None, indivisual_attn=False):
-
-        d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
-
-        sz_b, len_q, _ = q.size()
-        sz_b, len_k, _ = k.size()
-        sz_b, len_v, _ = v.size()
-
-        residual = q
-
-        q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
-        k = self.w_ks(k).view(sz_b, len_k, n_head, d_k)
-        v = self.w_vs(v).view(sz_b, len_v, n_head, d_v)
-        q = q.permute(2, 0, 1, 3).contiguous().view(-1,
-                                                    len_q, d_k)  # (n*b) x lq x dk
-        k = k.permute(2, 0, 1, 3).contiguous().view(-1,
-                                                    len_k, d_k)  # (n*b) x lk x dk
-        v = v.permute(2, 0, 1, 3).contiguous().view(-1,
-                                                    len_v, d_v)  # (n*b) x lv x dv
-
-        if mask_1 is not None:
-            mask_1 = mask_1.repeat(n_head, 1, 1)  # (n*b) x .. x ..
-        if mask_2 is not None:
-            mask_2 = mask_2.repeat(n_head, 1, 1)  # (n*b) x .. x ..
-        if mapping_mask is not None:
-            mapping_mask = mapping_mask.repeat(n_head, 1, 1)  # (n*b) x .. x ..
-        output, attn = self.attention(
-            q, k, v, mask_1=mask_1, mask_2=mask_2, mapping_mask=mapping_mask)
-
-        output = output.view(n_head, sz_b, len_q, d_v)
-        output = (
-            output.permute(1, 2, 0, 3).contiguous().view(sz_b, len_q, -1)
-        )  # b x lq x (n*dv)
-
-        output = self.dropout(self.fc(output))
-        output = self.layer_norm(output + residual)
-
-        if indivisual_attn:
-            attn = attn.view(n_head, sz_b, len_q, len_k)
-
-        return output, attn
-
-
-class ScaledDotProductAttention(nn.Module):
-    """ Scaled Dot-Product Attention """
-
-    def __init__(self, temperature):
-        super(ScaledDotProductAttention, self).__init__()
-        self.temperature = temperature
-        self.softmax = nn.Softmax(dim=2)
-
-    def forward(self, q, k, v, mask_1=None, mask_2=None, mapping_mask=None):
-
-        attn = torch.bmm(q, k.transpose(1, 2))
-        attn = attn / self.temperature
-
-        if mask_1 is not None:
-            attn = attn.masked_fill(mask_1, -np.inf)
-        attn = self.softmax(attn)
-
-        if mask_2 is not None:
-            attn = attn.masked_fill(mask_2, 0.)
-        if mapping_mask is not None:
-            attn = attn.masked_fill(mapping_mask, 0.)
-        output = torch.bmm(attn, v)
-
-        return output, attn
-
-
-class PositionwiseFeedForward(nn.Module):
-    """ A two-feed-forward-layer """
-
-    def __init__(self, d_in, d_hid, kernel_size, dropout=0.0):
-        super(PositionwiseFeedForward, self).__init__()
-
-        # Use Conv1D
-        # position-wise
-        self.w_1 = nn.Conv1d(
-            d_in,
-            d_hid,
-            kernel_size=kernel_size,
-            padding=(kernel_size - 1) // 2,
-        )
-        # position-wise
-        self.w_2 = nn.Conv1d(
-            d_hid,
-            d_in,
-            kernel_size=kernel_size,
-            padding=(kernel_size - 1) // 2,
-        )
-
-        self.layer_norm = nn.LayerNorm(d_in)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        residual = x
-        output = x.transpose(1, 2)
-        output = self.w_2(F.relu(self.w_1(output)))
-        output = output.transpose(1, 2)
-        output = self.dropout(output)
-        output = self.layer_norm(output + residual)
-
-        return output
-
-
 class NonCausalWaveNet(torch.nn.Module):
+    """ Non-Causal WaveNet """
+
     def __init__(self, hidden_channels, kernel_size, dilation_rate, n_layers, gin_channels=0, p_dropout=0, n_sqz=1):
         super(NonCausalWaveNet, self).__init__()
         assert(kernel_size % 2 == 1)
@@ -440,7 +292,7 @@ class NonCausalWaveNet(torch.nn.Module):
 
 
 class RelativeFFTBlock(nn.Module):
-    """ FFT Block with RelMHA """
+    """ FFT Block with Relative Multi-Head Attention """
 
     def __init__(self, hidden_channels, filter_channels, n_heads, n_layers, kernel_size=1, p_dropout=0., window_size=None, block_length=None):
         super(RelativeFFTBlock, self).__init__()
@@ -459,7 +311,7 @@ class RelativeFFTBlock(nn.Module):
         self.ffn_layers = nn.ModuleList()
         self.norm_layers_2 = nn.ModuleList()
         for i in range(self.n_layers):
-            self.attn_layers.append(RelativeMultiHeadAttention(hidden_channels, hidden_channels, n_heads,
+            self.attn_layers.append(RelativeSelfAttention(hidden_channels, hidden_channels, n_heads,
                                     window_size=window_size, p_dropout=p_dropout, block_length=block_length))
             self.norm_layers_1.append(LayerNorm(hidden_channels))
             self.ffn_layers.append(FFN(
@@ -481,9 +333,11 @@ class RelativeFFTBlock(nn.Module):
         return x
 
 
-class RelativeMultiHeadAttention(nn.Module):
+class RelativeSelfAttention(nn.Module):
+    """ Relative Multi-Head Attention """
+
     def __init__(self, channels, out_channels, n_heads, window_size=None, heads_share=True, p_dropout=0., block_length=None, proximal_bias=False, proximal_init=False):
-        super().__init__()
+        super(RelativeSelfAttention, self).__init__()
         assert channels % n_heads == 0
 
         self.channels = channels
@@ -575,20 +429,10 @@ class RelativeMultiHeadAttention(nn.Module):
         return output, p_attn
 
     def _matmul_with_relative_values(self, x, y):
-        """
-        x: [b, h, l, m]
-        y: [h or 1, m, d]
-        ret: [b, h, l, d]
-        """
         ret = torch.matmul(x, y.unsqueeze(0))
         return ret
 
     def _matmul_with_relative_keys(self, x, y):
-        """
-        x: [b, h, l, d]
-        y: [h or 1, m, d]
-        ret: [b, h, l, m]
-        """
         ret = torch.matmul(x, y.unsqueeze(0).transpose(-2, -1))
         return ret
 
@@ -609,10 +453,6 @@ class RelativeMultiHeadAttention(nn.Module):
         return used_relative_embeddings
 
     def _relative_position_to_absolute_position(self, x):
-        """
-        x: [b, h, l, 2*l-1]
-        ret: [b, h, l, l]
-        """
         batch, heads, length, _ = x.size()
         # Concat columns of pad to shift from relative to absolute indexing.
         x = F.pad(x, convert_pad_shape(
@@ -629,10 +469,6 @@ class RelativeMultiHeadAttention(nn.Module):
         return x_final
 
     def _absolute_position_to_relative_position(self, x):
-        """
-        x: [b, h, l, l]
-        ret: [b, h, l, 2*l-1]
-        """
         batch, heads, length, _ = x.size()
         # padd along column
         x = F.pad(x, convert_pad_shape(
@@ -645,11 +481,8 @@ class RelativeMultiHeadAttention(nn.Module):
         return x_final
 
     def _attention_bias_proximal(self, length):
-        """Bias for self-attention to encourage attention to close positions.
-        Args:
-          length: an integer scalar.
-        Returns:
-          a Tensor with shape [1, 1, length, length]
+        """
+        Bias for self-attention to encourage attention to close positions.
         """
         r = torch.arange(length, dtype=torch.float32)
         diff = torch.unsqueeze(r, 0) - torch.unsqueeze(r, 1)
@@ -702,3 +535,92 @@ class FFN(nn.Module):
         x = self.drop(x)
         x = self.conv_2(x * x_mask)
         return x * x_mask
+
+
+class WordToPhonemeAttention(nn.Module):
+    """ Word-to-Phoneme Multi-Head Attention """
+
+    def __init__(self, n_head, d_model, d_k, d_v, dropout=0.0):
+        super(WordToPhonemeAttention, self).__init__()
+
+        self.n_head = n_head
+        self.d_k = d_k
+        self.d_v = d_v
+
+        self.w_qs = LinearNorm(d_model, n_head * d_k)
+        self.w_ks = LinearNorm(d_model, n_head * d_k)
+        self.w_vs = LinearNorm(d_model, n_head * d_v)
+
+        self.attention = ScaledDotProductAttention(
+            temperature=np.power(d_k, 0.5))
+        self.layer_norm = nn.LayerNorm(d_model)
+
+        self.fc = LinearNorm(n_head * d_v, d_model)
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, q, k, v, mask_1=None, mask_2=None, mapping_mask=None, indivisual_attn=False):
+
+        d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
+
+        sz_b, len_q, _ = q.size()
+        sz_b, len_k, _ = k.size()
+        sz_b, len_v, _ = v.size()
+
+        residual = q
+
+        q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
+        k = self.w_ks(k).view(sz_b, len_k, n_head, d_k)
+        v = self.w_vs(v).view(sz_b, len_v, n_head, d_v)
+        q = q.permute(2, 0, 1, 3).contiguous().view(-1,
+                                                    len_q, d_k)  # (n*b) x lq x dk
+        k = k.permute(2, 0, 1, 3).contiguous().view(-1,
+                                                    len_k, d_k)  # (n*b) x lk x dk
+        v = v.permute(2, 0, 1, 3).contiguous().view(-1,
+                                                    len_v, d_v)  # (n*b) x lv x dv
+
+        if mask_1 is not None:
+            mask_1 = mask_1.repeat(n_head, 1, 1)  # (n*b) x .. x ..
+        if mask_2 is not None:
+            mask_2 = mask_2.repeat(n_head, 1, 1)  # (n*b) x .. x ..
+        if mapping_mask is not None:
+            mapping_mask = mapping_mask.repeat(n_head, 1, 1)  # (n*b) x .. x ..
+        output, attn = self.attention(
+            q, k, v, mask_1=mask_1, mask_2=mask_2, mapping_mask=mapping_mask)
+
+        output = output.view(n_head, sz_b, len_q, d_v)
+        output = (
+            output.permute(1, 2, 0, 3).contiguous().view(sz_b, len_q, -1)
+        )  # b x lq x (n*dv)
+
+        output = self.dropout(self.fc(output))
+        output = self.layer_norm(output + residual)
+
+        if indivisual_attn:
+            attn = attn.view(n_head, sz_b, len_q, len_k)
+
+        return output, attn
+
+
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, temperature):
+        super(ScaledDotProductAttention, self).__init__()
+        self.temperature = temperature
+        self.softmax = nn.Softmax(dim=2)
+
+    def forward(self, q, k, v, mask_1=None, mask_2=None, mapping_mask=None):
+
+        attn = torch.bmm(q, k.transpose(1, 2))
+        attn = attn / self.temperature
+
+        if mask_1 is not None:
+            attn = attn.masked_fill(mask_1==0., -np.inf)
+        attn = self.softmax(attn)
+
+        if mask_2 is not None:
+            attn = attn * mask_2
+        if mapping_mask is not None:
+            attn = attn * mapping_mask
+        output = torch.bmm(attn, v)
+
+        return output, attn

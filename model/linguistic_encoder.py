@@ -8,9 +8,8 @@ from utils.tools import get_mask_from_lengths, pad, word_level_pooling
 
 from .blocks import (
     ConvNorm,
-    FFTBlock,
-    MultiHeadAttention,
     RelativeFFTBlock,
+    WordToPhonemeAttention,
 )
 from text.symbols import symbols
 
@@ -41,7 +40,7 @@ def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
 class LinguisticEncoder(nn.Module):
     """ Linguistic Encoder """
 
-    def __init__(self, config, abs_mha=True):
+    def __init__(self, config):
         super(LinguisticEncoder, self).__init__()
 
         n_position = config["max_seq_len"] + 1
@@ -79,47 +78,28 @@ class LinguisticEncoder(nn.Module):
             requires_grad=True,
         )
 
-        self.abs_mha = abs_mha
-        if abs_mha:
-            self.phoneme_encoder = nn.ModuleList(
-                [
-                    FFTBlock(
-                        d_model, n_head, d_k, d_v, d_inner, kernel_size  # , dropout=dropout
-                    )
-                    for _ in range(n_layers)
-                ]
-            )
-            self.word_encoder = nn.ModuleList(
-                [
-                    FFTBlock(
-                        d_model, n_head, d_k, d_v, d_inner, kernel_size  # , dropout=dropout
-                    )
-                    for _ in range(n_layers)
-                ]
-            )
-        else:
-            self.phoneme_encoder = RelativeFFTBlock(
-                d_model,
-                d_inner,
-                n_head,
-                n_layers,
-                kernel_size,
-                # dropout,
-                window_size,
-            )
-            self.word_encoder = RelativeFFTBlock(
-                d_model,
-                d_inner,
-                n_head,
-                n_layers,
-                kernel_size,
-                # dropout,
-                window_size,
-            )
+        self.phoneme_encoder = RelativeFFTBlock(
+            hidden_channels=d_model,
+            filter_channels=d_inner,
+            n_heads=n_head,
+            n_layers=n_layers,
+            kernel_size=kernel_size,
+            # p_dropout=dropout,
+            window_size=window_size,
+        )
+        self.word_encoder = RelativeFFTBlock(
+            hidden_channels=d_model,
+            filter_channels=d_inner,
+            n_heads=n_head,
+            n_layers=n_layers,
+            kernel_size=kernel_size,
+            # p_dropout=dropout,
+            window_size=window_size,
+        )
         self.length_regulator = LengthRegulator()
         self.duration_predictor = VariancePredictor(config)
 
-        self.w2p_attn = MultiHeadAttention(
+        self.w2p_attn = WordToPhonemeAttention(
             n_head, d_model, d_k, d_v  # , dropout=dropout
         )
 
@@ -137,7 +117,7 @@ class LinguisticEncoder(nn.Module):
             for i in range(1, len(w)):
                 mask[b, w[i-1]:w[i], p[i-1]:p[i]
                      ] = torch.zeros(w[i]-w[i-1], p[i]-p[i-1], device=device)
-        return mask == 1.
+        return mask == 0.
 
     def add_position_enc(self, src_seq, position_enc=None, coef=None):
         batch_size, max_len = src_seq.shape[0], src_seq.shape[1]
@@ -174,22 +154,7 @@ class LinguisticEncoder(nn.Module):
                 idx_b += list(range(d_i))
             idx.append(torch.tensor(idx_b).to(device))
             # assert L[-1].shape == idx[-1].shape
-        return torch.div(pad(idx).to(device), pad(L).masked_fill(mask, 1.).to(device))
-
-    def encode(self, encoder, src_seq, mask, src_emb=True, return_attns=False):
-        slf_attn_list = []
-        slf_attn_mask = mask.unsqueeze(1).expand(-1, src_seq.shape[1], -1)
-        if src_emb:
-            src_seq = self.src_emb(src_seq)
-        # Will be replaced with Relative PE
-        enc_out = self.add_position_enc(src_seq)
-        for enc_layer in encoder:
-            enc_out, enc_slf_attn = enc_layer(
-                enc_out, mask=mask, slf_attn_mask=slf_attn_mask
-            )
-            if return_attns:
-                slf_attn_list += [enc_slf_attn]
-        return enc_out, slf_attn_list
+        return torch.div(pad(idx).to(device), pad(L).masked_fill(mask==0., 1.).to(device))
 
     def forward(
         self,
@@ -206,25 +171,17 @@ class LinguisticEncoder(nn.Module):
         return_attns=False,
     ):
         # Phoneme Encoding
-        if self.abs_mha:
-            enc_out_p, slf_attn_list_p = self.encode(
-                self.phoneme_encoder, src_seq, p_mask, return_attns=return_attns)
-        else:
-            src_seq = self.src_emb(src_seq)
-            enc_out_p = self.phoneme_encoder(src_seq.transpose(
-                1, 2), p_mask.unsqueeze(1)).transpose(1, 2)
+        src_seq = self.src_emb(src_seq)
+        enc_out_p = self.phoneme_encoder(src_seq.transpose(
+            1, 2), p_mask.unsqueeze(1)).transpose(1, 2)
 
         # Word-level Pooing
         src_seq_w = word_level_pooling(
             enc_out_p, src_len, wb, src_w_len, reduce_mean=True)
 
         # Word Encoding
-        if self.abs_mha:
-            enc_out_w, slf_attn_list_w = self.encode(
-                self.word_encoder, src_seq_w, w_mask, src_emb=False, return_attns=return_attns)
-        else:
-            enc_out_w = self.word_encoder(src_seq_w.transpose(
-                1, 2), w_mask.unsqueeze(1)).transpose(1, 2)
+        enc_out_w = self.word_encoder(src_seq_w.transpose(
+            1, 2), w_mask.unsqueeze(1)).transpose(1, 2)
 
         # Phoneme-level Duration Prediction
         log_duration_p_prediction = self.duration_predictor(enc_out_p, p_mask)
@@ -374,6 +331,6 @@ class VariancePredictor(nn.Module):
         out = out.squeeze(-1)
 
         if mask is not None:
-            out = out.masked_fill(mask, 0.0)
+            out = out * mask
 
         return out
