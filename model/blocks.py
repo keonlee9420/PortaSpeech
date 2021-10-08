@@ -315,7 +315,7 @@ class RelativeFFTBlock(nn.Module):
                                     window_size=window_size, p_dropout=p_dropout, block_length=block_length))
             self.norm_layers_1.append(LayerNorm(hidden_channels))
             self.ffn_layers.append(FFN(
-                hidden_channels, hidden_channels, filter_channels, kernel_size, p_dropout=p_dropout))
+                hidden_channels, hidden_channels, kernel_size, p_dropout=p_dropout))
             self.norm_layers_2.append(LayerNorm(hidden_channels))
 
     def forward(self, x, x_mask):
@@ -511,29 +511,25 @@ class LayerNorm(nn.Module):
 
 
 class FFN(nn.Module):
-    def __init__(self, in_channels, out_channels, filter_channels, kernel_size, p_dropout=0., activation=None):
+    def __init__(self, in_channels, out_channels, kernel_size, p_dropout=0., activation=None):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.filter_channels = filter_channels
         self.kernel_size = kernel_size
         self.p_dropout = p_dropout
         self.activation = activation
 
-        self.conv_1 = nn.Conv1d(
-            in_channels, filter_channels, kernel_size, padding=kernel_size//2)
-        self.conv_2 = nn.Conv1d(
-            filter_channels, out_channels, kernel_size, padding=kernel_size//2)
+        self.conv = nn.Conv1d(
+            in_channels, out_channels, kernel_size, padding=kernel_size//2)
         self.drop = nn.Dropout(p_dropout)
 
     def forward(self, x, x_mask):
-        x = self.conv_1(x * x_mask)
+        x = self.conv(x * x_mask)
         if self.activation == "gelu":
             x = x * torch.sigmoid(1.702 * x)
         else:
             x = torch.relu(x)
         x = self.drop(x)
-        x = self.conv_2(x * x_mask)
         return x * x_mask
 
 
@@ -553,7 +549,7 @@ class WordToPhonemeAttention(nn.Module):
 
         self.attention = ScaledDotProductAttention(
             temperature=np.power(d_k, 0.5))
-        self.layer_norm = nn.LayerNorm(d_model)
+        # self.layer_norm = nn.LayerNorm(d_model)
 
         self.fc = LinearNorm(n_head * d_v, d_model)
 
@@ -594,7 +590,8 @@ class WordToPhonemeAttention(nn.Module):
         )  # b x lq x (n*dv)
 
         output = self.dropout(self.fc(output))
-        output = self.layer_norm(output + residual)
+        output = output + residual
+        # output = self.layer_norm(output)
 
         if indivisual_attn:
             attn = attn.view(n_head, sz_b, len_q, len_k)

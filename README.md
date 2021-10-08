@@ -9,8 +9,8 @@ PyTorch Implementation of [PortaSpeech: Portable and High-Quality Generative Tex
 ## Model Size
 | Module | Normal | Small | Normal (paper) | Small (paper) |
 | :----- | :-----: | :-----: | :-----: | :-----: |
-| *Total* | 34.3M | 9.6M | 21.8M | 6.7M
-| *LinguisticEncoder* | 14M | 3.5M | - | -
+| *Total* | 24M | 7.6M | 21.8M | 6.7M
+| *LinguisticEncoder* | 3.7M | 1.4M | - | -
 | *VariationalGenerator* | 11M | 2.8M | - | -
 | *FlowPostNet* | 9.3M | 3.4M | - | -
 

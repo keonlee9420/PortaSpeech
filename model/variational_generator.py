@@ -58,11 +58,13 @@ class VariationalGenerator(nn.Module):
         self.cond_layer_e = torch.nn.utils.weight_norm(
             torch.nn.Conv1d(
                 d_model,
-                2*encoder_decoder_hidden*encoder_layer,
+                2*encoder_decoder_hidden*encoder_layer,  # d_model
                 kernel_size=conv_kernel_size,
                 stride=conv_stride_size,
                 padding=self.padding_size,
                 dilation=dilation), name='weight')
+        # self.cond_layer_e_prj = LinearNorm(
+        #     d_model, 2*encoder_decoder_hidden*encoder_layer)
         self.enc_wn = NonCausalWaveNet(
             encoder_decoder_hidden,
             conv_kernel_size,
@@ -92,11 +94,13 @@ class VariationalGenerator(nn.Module):
         self.cond_layer_d = torch.nn.utils.weight_norm(
             torch.nn.Conv1d(
                 d_model,
-                2*encoder_decoder_hidden*decoder_layer,
+                2*encoder_decoder_hidden*decoder_layer,  # d_model
                 kernel_size=conv_kernel_size,
                 stride=conv_stride_size,
                 padding=self.padding_size,
                 dilation=dilation), name='weight')
+        # self.cond_layer_d_prj = LinearNorm(
+        #     d_model, 2*encoder_decoder_hidden*decoder_layer)
         self.dec_wn = NonCausalWaveNet(
             encoder_decoder_hidden,
             conv_kernel_size,
@@ -168,6 +172,11 @@ class VariationalGenerator(nn.Module):
         mel = self.pad_input(mel)
 
         # Prepare Conditioner
+        # h_text_f = self.cond_layer_f(h_text.transpose(1, 2))  # [B, H, L']
+        # h_text_e = self.cond_layer_e_prj(self.cond_layer_e(
+        #     h_text.transpose(1, 2)).transpose(1, 2)).transpose(1, 2)  # [B, H, L']
+        # h_text_d = self.cond_layer_d_prj(self.cond_layer_d(
+        #     h_text.transpose(1, 2)).transpose(1, 2)).transpose(1, 2)  # [B, H, L']
         h_text = h_text.transpose(1, 2)
         h_text_f = self.cond_layer_f(h_text)  # [B, H, L']
         h_text_e = self.cond_layer_e(h_text)  # [B, H, L']
@@ -197,7 +206,8 @@ class VariationalGenerator(nn.Module):
         x = self.dec_wn(x, g=h_text_d) * mel_mask_conv.transpose(1, 2)
         x = x.contiguous().transpose(1, 2)
         mel_res = self.dec_conv(x)
-        mel_res = self.trim_output(mel_res, mel_mask.shape[1]) * mel_mask.unsqueeze(-1)
+        mel_res = self.trim_output(
+            mel_res, mel_mask.shape[1]) * mel_mask.unsqueeze(-1)
         residual = self.residual_layer(mel_res) * mel_mask.unsqueeze(-1)
 
         return mel_res, residual, (z_p, logs_q.transpose(1, 2), mel_mask_conv.transpose(1, 2))
@@ -212,6 +222,9 @@ class VariationalGenerator(nn.Module):
         h_text = self.pad_input(h_text)
 
         # Prepare Conditioner
+        # h_text_f = self.cond_layer_f(h_text.transpose(1, 2))  # [B, H, L']
+        # h_text_d = self.cond_layer_d_prj(self.cond_layer_d(
+        #     h_text.transpose(1, 2)).transpose(1, 2)).transpose(1, 2)  # [B, H, L']
         h_text = h_text.transpose(1, 2)
         h_text_f = self.cond_layer_f(h_text)  # [B, H, L']
         h_text_d = self.cond_layer_d(h_text)  # [B, H, L']
@@ -230,7 +243,8 @@ class VariationalGenerator(nn.Module):
         x = self.dec_wn(x, g=h_text_d) * mel_mask_conv.transpose(1, 2)
         x = x.contiguous().transpose(1, 2)
         mel_res = self.dec_conv(x)
-        mel_res = self.trim_output(mel_res, mel_mask.shape[1]) * mel_mask.unsqueeze(-1)
+        mel_res = self.trim_output(
+            mel_res, mel_mask.shape[1]) * mel_mask.unsqueeze(-1)
         residual = self.residual_layer(mel_res) * mel_mask.unsqueeze(-1)
 
         return mel_res, residual, None
