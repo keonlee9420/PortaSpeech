@@ -395,7 +395,7 @@ def reparameterize(mu, logvar):
     return eps * std + mu
 
 
-def word_level_pooling(src_seq, src_len, wb, src_w_len, reduce_sum=False, reduce_mean=False):
+def word_level_pooling(src_seq, src_len, wb, src_w_len, reduce="sum"):
     """
     src_seq -- [batch_size, max_time, dim]
     src_len -- [batch_size,]
@@ -406,11 +406,11 @@ def word_level_pooling(src_seq, src_len, wb, src_w_len, reduce_sum=False, reduce
     for s, sl, w, wl in zip(src_seq, src_len, wb, src_w_len):
         m, split_size = s[:sl, :], list(w[:wl].int())
         m = nn.utils.rnn.pad_sequence(torch.split(m, split_size, dim=0))
-        if reduce_mean and not reduce_sum:
+        if reduce == "sum":
+            m = torch.sum(m, dim=0)  # [src_w_len, hidden]
+        elif reduce == "mean":
             m = torch.div(torch.sum(m, dim=0), torch.tensor(
                 split_size, device=device).unsqueeze(-1))  # [src_w_len, hidden]
-        elif reduce_sum and not reduce_mean:
-            m = torch.sum(m, dim=0)  # [src_w_len, hidden]
         else:
             raise ValueError()
         batch.append(m)

@@ -555,7 +555,7 @@ class WordToPhonemeAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, q, k, v, mask_1=None, mask_2=None, mapping_mask=None, indivisual_attn=False):
+    def forward(self, q, k, v, key_mask=None, query_mask=None, mapping_mask=None, indivisual_attn=False):
 
         d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
 
@@ -575,14 +575,14 @@ class WordToPhonemeAttention(nn.Module):
         v = v.permute(2, 0, 1, 3).contiguous().view(-1,
                                                     len_v, d_v)  # (n*b) x lv x dv
 
-        if mask_1 is not None:
-            mask_1 = mask_1.repeat(n_head, 1, 1)  # (n*b) x .. x ..
-        if mask_2 is not None:
-            mask_2 = mask_2.repeat(n_head, 1, 1)  # (n*b) x .. x ..
+        if key_mask is not None:
+            key_mask = key_mask.repeat(n_head, 1, 1)  # (n*b) x .. x ..
+        if query_mask is not None:
+            query_mask = query_mask.repeat(n_head, 1, 1)  # (n*b) x .. x ..
         if mapping_mask is not None:
             mapping_mask = mapping_mask.repeat(n_head, 1, 1)  # (n*b) x .. x ..
         output, attn = self.attention(
-            q, k, v, mask_1=mask_1, mask_2=mask_2, mapping_mask=mapping_mask)
+            q, k, v, key_mask=key_mask, query_mask=query_mask, mapping_mask=mapping_mask)
 
         output = output.view(n_head, sz_b, len_q, d_v)
         output = (
@@ -605,17 +605,17 @@ class ScaledDotProductAttention(nn.Module):
         self.temperature = temperature
         self.softmax = nn.Softmax(dim=2)
 
-    def forward(self, q, k, v, mask_1=None, mask_2=None, mapping_mask=None):
+    def forward(self, q, k, v, key_mask=None, query_mask=None, mapping_mask=None):
 
         attn = torch.bmm(q, k.transpose(1, 2))
         attn = attn / self.temperature
 
-        if mask_1 is not None:
-            attn = attn.masked_fill(mask_1==0., -np.inf)
+        if key_mask is not None:
+            attn = attn.masked_fill(key_mask==0., -np.inf)
         attn = self.softmax(attn)
 
-        if mask_2 is not None:
-            attn = attn * mask_2
+        if query_mask is not None:
+            attn = attn * query_mask
         if mapping_mask is not None:
             attn = attn * mapping_mask
         output = torch.bmm(attn, v)

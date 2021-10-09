@@ -105,7 +105,7 @@ class LinguisticEncoder(nn.Module):
 
     def get_mapping_mask(self, q, kv, dur_w, wb, src_w_len):
         """
-        A word-to-phoneme mapping mask to the attention weight to force each query (Q) 
+        For applying a word-to-phoneme mapping mask to the attention weight to force each query (Q) 
         to only attend to the phonemes belongs to the word corresponding to this query.
         """
         batch_size, q_len, kv_len, device = q.shape[0], q.shape[1], kv.shape[1], kv.device
@@ -142,7 +142,7 @@ class LinguisticEncoder(nn.Module):
 
     def get_rel_coef(self, dur, dur_len, mask):
         """
-        A well-designed positional encoding to the inputs of word-to-phoneme attention module.
+        For adding a well-designed positional encoding to the inputs of word-to-phoneme attention module.
         """
         idx, L, device = [], [], dur.device
         for d, dl in zip(dur, dur_len):
@@ -158,49 +158,48 @@ class LinguisticEncoder(nn.Module):
 
     def forward(
         self,
-        src_seq,
-        src_len,
-        wb,
-        p_mask,
+        src_p_seq,
+        src_p_len,
+        word_boundary,
+        src_p_mask,
         src_w_len,
-        w_mask,
+        src_w_mask,
         mel_mask=None,
         max_len=None,
         duration_target=None,
-        d_control=1.0,
-        return_attns=False,
+        duration_control=1.0,
     ):
         # Phoneme Encoding
-        src_seq = self.src_emb(src_seq)
-        enc_out_p = self.phoneme_encoder(src_seq.transpose(
-            1, 2), p_mask.unsqueeze(1)).transpose(1, 2)
+        src_p_seq = self.src_emb(src_p_seq)
+        enc_p_out = self.phoneme_encoder(src_p_seq.transpose(
+            1, 2), src_p_mask.unsqueeze(1)).transpose(1, 2)
 
         # Word-level Pooing
-        src_seq_w = word_level_pooling(
-            enc_out_p, src_len, wb, src_w_len, reduce_mean=True)
+        src_w_seq = word_level_pooling(
+            enc_p_out, src_p_len, word_boundary, src_w_len, reduce="mean")
 
         # Word Encoding
-        enc_out_w = self.word_encoder(src_seq_w.transpose(
-            1, 2), w_mask.unsqueeze(1)).transpose(1, 2)
+        enc_w_out = self.word_encoder(src_w_seq.transpose(
+            1, 2), src_w_mask.unsqueeze(1)).transpose(1, 2)
 
         # Phoneme-level Duration Prediction
-        log_duration_p_prediction = self.duration_predictor(enc_out_p, p_mask)
+        log_duration_p_prediction = self.duration_predictor(enc_p_out, src_p_mask)
 
         # Word-level Pooling
         log_duration_w_prediction = word_level_pooling(
-            log_duration_p_prediction.unsqueeze(-1), src_len, wb, src_w_len, reduce_sum=True).squeeze(-1)
+            log_duration_p_prediction.unsqueeze(-1), src_p_len, word_boundary, src_w_len, reduce="sum").squeeze(-1)
 
-        x = enc_out_w
+        x = enc_w_out
         if duration_target is not None:
             # Word-level Pooing
             duration_w_rounded = word_level_pooling(
-                duration_target.unsqueeze(-1), src_len, wb, src_w_len, reduce_sum=True).squeeze(-1)
+                duration_target.unsqueeze(-1), src_p_len, word_boundary, src_w_len, reduce="sum").squeeze(-1)
             # Word-level Length Regulate
             x, mel_len = self.length_regulator(x, duration_w_rounded, max_len)
         else:
             # Word-level Duration
             duration_w_rounded = torch.clamp(
-                (torch.round(torch.exp(log_duration_w_prediction) - 1) * d_control),
+                (torch.round(torch.exp(log_duration_w_prediction) - 1) * duration_control),
                 min=0,
             ).long()
             # Word-level Length Regulate
@@ -209,23 +208,23 @@ class LinguisticEncoder(nn.Module):
 
         # Word-to-Phoneme Attention
         # [batch, mel_len, seq_len]
-        src_mask_ = p_mask.unsqueeze(1).expand(-1, mel_mask.shape[1], -1)
+        src_mask_ = src_p_mask.unsqueeze(1).expand(-1, mel_mask.shape[1], -1)
         # [batch, mel_len, seq_len]
-        mel_mask_ = mel_mask.unsqueeze(-1).expand(-1, -1, p_mask.shape[1])
+        mel_mask_ = mel_mask.unsqueeze(-1).expand(-1, -1, src_p_mask.shape[1])
         mapping_mask = self.get_mapping_mask(
-            x, enc_out_p, duration_w_rounded, wb, src_w_len)  # [batch, mel_len, seq_len]
+            x, enc_p_out, duration_w_rounded, word_boundary, src_w_len)  # [batch, mel_len, seq_len]
 
         q = self.add_position_enc(x, position_enc=self.q_position_enc, coef=self.get_rel_coef(
             duration_w_rounded, src_w_len, mel_mask))
         k = self.add_position_enc(
-            enc_out_p, position_enc=self.kv_position_enc, coef=self.get_rel_coef(wb, src_len, p_mask))
+            enc_p_out, position_enc=self.kv_position_enc, coef=self.get_rel_coef(word_boundary, src_p_len, src_p_mask))
         v = self.add_position_enc(
-            enc_out_p, position_enc=self.kv_position_enc, coef=self.get_rel_coef(wb, src_len, p_mask))
+            enc_p_out, position_enc=self.kv_position_enc, coef=self.get_rel_coef(word_boundary, src_p_len, src_p_mask))
         # q = self.add_position_enc(x)
-        # k = self.add_position_enc(enc_out_p)
-        # v = self.add_position_enc(enc_out_p)
+        # k = self.add_position_enc(enc_p_out)
+        # v = self.add_position_enc(enc_p_out)
         x, alignment = self.w2p_attn(
-            q, k, v, mask_1=src_mask_, mask_2=mel_mask_, mapping_mask=mapping_mask, indivisual_attn=True
+            q, k, v, key_mask=src_mask_, query_mask=mel_mask_, mapping_mask=mapping_mask, indivisual_attn=True
         )
 
         return (

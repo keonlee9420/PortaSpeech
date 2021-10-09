@@ -68,7 +68,7 @@ Please note that the controllability is originated from [FastSpeech2](https://ar
 
 ## Datasets
 
-The supported datasets is
+The supported datasets are
 
 - [LJSpeech](https://keithito.com/LJ-Speech-Dataset/): a **single-speaker** English dataset consists of 13100 short audio clips of a female speaker reading passages from 7 non-fiction books, approximately 24 hours in total.
 <!-- - [VCTK](https://datashare.ed.ac.uk/handle/10283/3443): The CSTR VCTK Corpus includes speech data uttered by 110 English speakers (**multi-speaker TTS**) with various accents. Each speaker reads out about 400 sentences, which were selected from a newspaper, the rainbow passage and an elicitation paragraph used for the speech accent archive.
@@ -120,8 +120,7 @@ to serve TensorBoard on your localhost.
 # Notes
 
 - For vocoder, **HiFi-GAN** and **MelGAN** are supported.
-- Add convolution layer and residual layer in **VariationalGenerator** to match the shape of conditioner and output.
-- No ReLU activation and LayerNorm in **VariationalGenerator** for convergence of word-to-phoneme alignment of **LinguisticEncoder**.
+- No ReLU activation and LayerNorm in **VariationalGenerator** to avoid mashed output.
 - Will be extended to a **multi-speaker TTS**.
 <!-- - Two options for embedding for the **multi-speaker TTS** setting: training speaker embedder from scratch or using a pre-trained [philipperemy's DeepSpeaker](https://github.com/philipperemy/deep-speaker) model (as [STYLER](https://github.com/keonlee9420/STYLER) did). You can toggle it by setting the config (between `'none'` and `'DeepSpeaker'`).
 - DeepSpeaker on VCTK dataset shows clear identification among speakers. The following figure shows the T-SNE plot of extracted speaker embedding.
