@@ -120,6 +120,7 @@ to serve TensorBoard on your localhost.
 # Notes
 
 - For vocoder, **HiFi-GAN** and **MelGAN** are supported.
+- Speed ​​up the convergence of word-to-phoneme alignment in **LinguisticEncoder** by dividing long words into subwords and sorting the dataset by mel-spectrogram frame length.
 - No ReLU activation and LayerNorm in **VariationalGenerator** to avoid mashed output.
 - Will be extended to a **multi-speaker TTS**.
 <!-- - Two options for embedding for the **multi-speaker TTS** setting: training speaker embedder from scratch or using a pre-trained [philipperemy's DeepSpeaker](https://github.com/philipperemy/deep-speaker) model (as [STYLER](https://github.com/keonlee9420/STYLER) did). You can toggle it by setting the config (between `'none'` and `'DeepSpeaker'`).

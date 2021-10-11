@@ -12,7 +12,7 @@ from g2p_en import G2p
 # from pypinyin import pinyin, Style
 
 from utils.model import get_model, get_vocoder
-from utils.tools import get_configs_of, to_device, synth_samples
+from utils.tools import get_configs_of, to_device, synth_samples, word_level_subdivision
 from dataset import TextDataset
 from text import text_to_sequence
 
@@ -48,6 +48,10 @@ def preprocess_english(text, preprocess_config):
     phones = "{" + "}{".join(phones) + "}"
     phones = re.sub(r"\{[^\w\s]?\}", "{sp}", phones)
     phones = phones.replace("}{", " ")
+
+    if preprocess_config["preprocessing"]["text"]["sub_divide_word"]:
+        word_boundaries = word_level_subdivision(
+            word_boundaries, preprocess_config["preprocessing"]["text"]["max_phoneme_num"])
 
     print("Raw Text Sequence: {}".format(text))
     print("Phoneme Sequence: {}".format(phones))

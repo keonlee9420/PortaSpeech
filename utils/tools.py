@@ -163,7 +163,8 @@ def synth_one_sample(model, targets, predictions, vocoder, model_config, preproc
                                     :mel_len].float().detach()
     # Variational Generator Reconstruction
     residual = predictions[11][0, :mel_len].unsqueeze(0).detach()
-    out_residual = model.variational_generator.residual_layer(mel_reconst_vg.unsqueeze(0))
+    out_residual = model.variational_generator.residual_layer(
+        mel_reconst_vg.unsqueeze(0))
     mel_reconst_vg = mel_reconst_vg.transpose(0, 1)
 
     # PostNet Inference on the reconstruction
@@ -415,3 +416,14 @@ def word_level_pooling(src_seq, src_len, wb, src_w_len, reduce="sum"):
             raise ValueError()
         batch.append(m)
     return pad(batch).to(device)
+
+
+def word_level_subdivision(phones_per_word, max_phoneme_num):
+    res = []
+    for l in phones_per_word:
+        if l <= max_phoneme_num:
+            res.append(l)
+        else:
+            s, r = l//max_phoneme_num, l % max_phoneme_num
+            res += [max_phoneme_num]*s + ([r] if r else [])
+    return res

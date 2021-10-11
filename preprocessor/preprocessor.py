@@ -14,7 +14,7 @@ from pathlib import Path
 
 import audio as Audio
 from model import PreDefinedEmbedder
-from utils.tools import plot_embedding
+from utils.tools import plot_embedding, word_level_subdivision
 
 
 class Preprocessor:
@@ -28,6 +28,9 @@ class Preprocessor:
         self.val_size = preprocess_config["preprocessing"]["val_size"]
         self.sampling_rate = preprocess_config["preprocessing"]["audio"]["sampling_rate"]
         self.hop_length = preprocess_config["preprocessing"]["stft"]["hop_length"]
+        self.sort_data = preprocess_config["preprocessing"]["sort_data"]
+        self.sub_divide_word = preprocess_config["preprocessing"]["text"]["sub_divide_word"]
+        self.max_phoneme_num = preprocess_config["preprocessing"]["text"]["max_phoneme_num"]
 
         self.STFT = Audio.stft.TacotronSTFT(
             preprocess_config["preprocessing"]["stft"]["filter_length"],
@@ -78,6 +81,7 @@ class Preprocessor:
         val = list()
         n_frames = 0
         max_seq_len = -float('inf')
+        mel_frame_len_dict = dict()
 
         skip_speakers = set()
         for embedding_name in os.listdir(embedding_dir):
@@ -120,6 +124,7 @@ class Preprocessor:
                         max_seq_len = n
 
                     n_frames += n
+                    mel_frame_len_dict[basename] = n
 
                 # Calculate and save mean speaker embedding of this speaker
                 if save_speaker_emb:
@@ -162,6 +167,10 @@ class Preprocessor:
             train = out[self.val_size:]
             val = out[: self.val_size]
 
+        if self.sort_data:
+            train.sort(key=lambda x: mel_frame_len_dict[x.split("|")[0]])
+            val.sort(key=lambda x: mel_frame_len_dict[x.split("|")[0]])
+
         # Write metadata
         with open(os.path.join(self.out_dir, "train.txt"), "w", encoding="utf-8") as f:
             for m in train:
@@ -184,6 +193,9 @@ class Preprocessor:
             textgrid.get_tier_by_name("phones"),
             textgrid.get_tier_by_name("words"),
         )
+        if self.sub_divide_word:
+            phones_per_word = word_level_subdivision(
+                phones_per_word, self.max_phoneme_num)
         text = "{" + " ".join(phone) + "}"
         if start >= end:
             return None

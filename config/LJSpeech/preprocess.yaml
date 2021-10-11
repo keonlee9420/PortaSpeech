@@ -7,10 +7,13 @@ path:
   preprocessed_path: "./preprocessed_data/LJSpeech"
 
 preprocessing:
+  sort_data: True # sort data by mel frame length
   val_size: 512
   text:
     text_cleaners: ["english_cleaners"]
     language: "en"
+    sub_divide_word: True
+    max_phoneme_num: 7
   audio:
     sampling_rate: 22050
     max_wav_value: 32768.0
