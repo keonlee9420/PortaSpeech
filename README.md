@@ -6,6 +6,9 @@ PyTorch Implementation of [PortaSpeech: Portable and High-Quality Generative Tex
     <img src="img/model.png" width="80%">
 </p>
 
+## Audio Samples
+Audio samples are available at [/demo](https://github.com/keonlee9420/PortaSpeech/tree/main/demo).
+
 ## Model Size
 | Module | Normal | Small | Normal (paper) | Small (paper) |
 | :----- | :-----: | :-----: | :-----: | :-----: |
@@ -111,11 +114,11 @@ tensorboard --logdir output/log
 ```
 
 to serve TensorBoard on your localhost.
-<!-- The loss curves, synthesized mel-spectrograms, and audios are shown.
+The loss curves, synthesized mel-spectrograms, and audios are shown.
 
 ![](./img/tensorboard_loss.png)
 ![](./img/tensorboard_spec.png)
-![](./img/tensorboard_audio.png) -->
+![](./img/tensorboard_audio.png)
 
 # Notes
 
