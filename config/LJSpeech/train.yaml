@@ -4,9 +4,9 @@ dist_config:
   dist_url: "tcp://localhost:80000"
   world_size: 1
 path:
-  ckpt_path: "./output/ckpt/LJSpeech"
-  log_path: "./output/log/LJSpeech"
-  result_path: "./output/result/LJSpeech"
+  ckpt_path: "./output/ckpt/LJSpeech_fixing"
+  log_path: "./output/log/LJSpeech_fixing"
+  result_path: "./output/result/LJSpeech_fixing"
 optimizer:
   batch_size: 64
   betas: [0.9, 0.98]

@@ -185,9 +185,9 @@ class LinguisticEncoder(nn.Module):
         # Phoneme-level Duration Prediction
         log_duration_p_prediction = self.duration_predictor(enc_p_out, src_p_mask)
 
-        # Word-level Pooling
+        # Word-level Pooling (in log scale)
         log_duration_w_prediction = word_level_pooling(
-            log_duration_p_prediction.unsqueeze(-1), src_p_len, word_boundary, src_w_len, reduce="sum").squeeze(-1)
+            log_duration_p_prediction.exp().unsqueeze(-1), src_p_len, word_boundary, src_w_len, reduce="sum").log().squeeze(-1)
 
         x = enc_w_out
         if duration_target is not None:
