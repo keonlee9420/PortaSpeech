@@ -25,3 +25,5 @@ preprocessing:
     n_mel_channels: 80
     mel_fmin: 0
     mel_fmax: 8000 # please set to 8000 for HiFi-GAN vocoder, set to null for MelGAN vocoder
+  aligner:
+    beta_binomial_scaling_factor: 1.

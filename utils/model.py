@@ -11,7 +11,7 @@ from model import PortaSpeech, ScheduledOptim
 def get_model(args, configs, device, train=False):
     (preprocess_config, model_config, train_config) = configs
 
-    model = PortaSpeech(preprocess_config, model_config).to(device)
+    model = PortaSpeech(preprocess_config, model_config, train_config).to(device)
     if args.restore_step:
         ckpt_path = os.path.join(
             train_config["path"]["ckpt_path"],

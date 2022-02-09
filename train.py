@@ -106,7 +106,7 @@ def train(rank, args, configs, batch_size, num_gpus):
                     output = model(*(batch[2:]))
 
                     # Cal Loss
-                    losses = Loss(batch, output)
+                    losses = Loss(batch, output, step)
                     total_loss = losses[0]
                     total_loss = total_loss / grad_acc_step
 
@@ -128,7 +128,7 @@ def train(rank, args, configs, batch_size, num_gpus):
                     if step % log_step == 0:
                         losses = [l.item() for l in losses]
                         message1 = "Step {}/{}, ".format(step, total_step)
-                        message2 = "Total Loss: {:.4f}, Mel Loss: {:.4f}, KL Loss: {:.4f}, PN Loss: {:.4f}, Duration Loss: {:.4f}".format(
+                        message2 = "Total Loss: {:.4f}, Mel Loss: {:.4f}, KL Loss: {:.4f}, PN Loss: {:.4f}, Duration Loss: {:.4f}, Helper Loss: {:.4f}".format(
                             *losses
                         )
 
@@ -234,6 +234,7 @@ if __name__ == "__main__":
     torch.cuda.manual_seed(train_config["seed"])
     num_gpus = torch.cuda.device_count()
     batch_size = int(train_config["optimizer"]["batch_size"] / num_gpus)
+    helper_type = train_config["aligner"]["helper_type"]
 
     # Log Configuration
     print("\n==================================== Training Configuration ====================================")
@@ -241,6 +242,7 @@ if __name__ == "__main__":
     print(' ---> Number of used GPU:', num_gpus)
     print(' ---> Batch size per GPU:', batch_size)
     print(' ---> Batch size in total:', batch_size * num_gpus)
+    print(' ---> Type of alignment helper:', helper_type)
     print("=================================================================================================")
     print("Prepare training ...")
 

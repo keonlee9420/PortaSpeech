@@ -40,25 +40,26 @@ def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
 class LinguisticEncoder(nn.Module):
     """ Linguistic Encoder """
 
-    def __init__(self, config):
+    def __init__(self, model_config, train_config):
         super(LinguisticEncoder, self).__init__()
 
-        n_position = config["max_seq_len"] + 1
+        n_position = model_config["max_seq_len"] + 1
         n_src_vocab = len(symbols) + 1
-        d_word_vec = config["transformer"]["encoder_hidden"]
-        n_layers = config["transformer"]["encoder_layer"]
-        n_head = config["transformer"]["encoder_head"]
+        d_word_vec = model_config["transformer"]["encoder_hidden"]
+        n_layers = model_config["transformer"]["encoder_layer"]
+        n_head = model_config["transformer"]["encoder_head"]
         d_k = d_v = (
-            config["transformer"]["encoder_hidden"]
-            // config["transformer"]["encoder_head"]
+            model_config["transformer"]["encoder_hidden"]
+            // model_config["transformer"]["encoder_head"]
         )
-        d_model = config["transformer"]["encoder_hidden"]
-        d_inner = config["transformer"]["conv_filter_size"]
-        kernel_size = config["transformer"]["conv_kernel_size"]
-        # dropout = config["transformer"]["encoder_dropout"]
-        window_size = config["transformer"]["encoder_window_size"]
+        d_model = model_config["transformer"]["encoder_hidden"]
+        d_inner = model_config["transformer"]["conv_filter_size"]
+        kernel_size = model_config["transformer"]["conv_kernel_size"]
+        # dropout = model_config["transformer"]["encoder_dropout"]
+        window_size = model_config["transformer"]["encoder_window_size"]
+        self.helper_type = train_config["aligner"]["helper_type"]
 
-        self.max_seq_len = config["max_seq_len"]
+        self.max_seq_len = model_config["max_seq_len"]
         self.d_model = d_model
         self.n_head = n_head
 
@@ -97,7 +98,7 @@ class LinguisticEncoder(nn.Module):
             window_size=window_size,
         )
         self.length_regulator = LengthRegulator()
-        self.duration_predictor = VariancePredictor(config)
+        self.duration_predictor = VariancePredictor(model_config)
 
         self.w2p_attn = WordToPhonemeAttention(
             n_head, d_model, d_k, d_v  # , dropout=dropout
@@ -154,7 +155,7 @@ class LinguisticEncoder(nn.Module):
                 idx_b += list(range(d_i))
             idx.append(torch.tensor(idx_b).to(device))
             # assert L[-1].shape == idx[-1].shape
-        return torch.div(pad(idx).to(device), pad(L).masked_fill(mask==0., 1.).to(device))
+        return torch.div(pad(idx).to(device), pad(L).masked_fill(mask == 0., 1.).to(device))
 
     def forward(
         self,
@@ -166,6 +167,7 @@ class LinguisticEncoder(nn.Module):
         src_w_mask,
         mel_mask=None,
         max_len=None,
+        attn_prior=None,
         duration_target=None,
         duration_control=1.0,
     ):
@@ -183,7 +185,8 @@ class LinguisticEncoder(nn.Module):
             1, 2), src_w_mask.unsqueeze(1)).transpose(1, 2)
 
         # Phoneme-level Duration Prediction
-        log_duration_p_prediction = self.duration_predictor(enc_p_out, src_p_mask)
+        log_duration_p_prediction = self.duration_predictor(
+            enc_p_out, src_p_mask)
 
         # Word-level Pooling (in log scale)
         log_duration_w_prediction = word_level_pooling(
@@ -211,8 +214,9 @@ class LinguisticEncoder(nn.Module):
         src_mask_ = src_p_mask.unsqueeze(1).expand(-1, mel_mask.shape[1], -1)
         # [batch, mel_len, seq_len]
         mel_mask_ = mel_mask.unsqueeze(-1).expand(-1, -1, src_p_mask.shape[1])
+        # [batch, mel_len, seq_len]
         mapping_mask = self.get_mapping_mask(
-            x, enc_p_out, duration_w_rounded, word_boundary, src_w_len)  # [batch, mel_len, seq_len]
+            x, enc_p_out, duration_w_rounded, word_boundary, src_w_len) 
 
         q = self.add_position_enc(x, position_enc=self.q_position_enc, coef=self.get_rel_coef(
             duration_w_rounded, src_w_len, mel_mask))
@@ -223,8 +227,15 @@ class LinguisticEncoder(nn.Module):
         # q = self.add_position_enc(x)
         # k = self.add_position_enc(enc_p_out)
         # v = self.add_position_enc(enc_p_out)
-        x, alignment = self.w2p_attn(
-            q, k, v, key_mask=src_mask_, query_mask=mel_mask_, mapping_mask=mapping_mask, indivisual_attn=True
+        x, attns, attn_logprob = self.w2p_attn(
+            q=q,
+            k=k,
+            v=v,
+            key_mask=src_mask_,
+            query_mask=mel_mask_,
+            mapping_mask=mapping_mask,
+            indivisual_attn=True,
+            attn_prior=attn_prior if self.helper_type == "ctc" else None,
         )
 
         return (
@@ -233,7 +244,8 @@ class LinguisticEncoder(nn.Module):
             duration_w_rounded,
             mel_len,
             mel_mask,
-            alignment,
+            attns,
+            attn_logprob,
         )
 
 

@@ -555,7 +555,7 @@ class WordToPhonemeAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, q, k, v, key_mask=None, query_mask=None, mapping_mask=None, indivisual_attn=False):
+    def forward(self, q, k, v, key_mask=None, query_mask=None, mapping_mask=None, indivisual_attn=False, attn_prior=None):
 
         d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
 
@@ -581,8 +581,10 @@ class WordToPhonemeAttention(nn.Module):
             query_mask = query_mask.repeat(n_head, 1, 1)  # (n*b) x .. x ..
         if mapping_mask is not None:
             mapping_mask = mapping_mask.repeat(n_head, 1, 1)  # (n*b) x .. x ..
-        output, attn = self.attention(
-            q, k, v, key_mask=key_mask, query_mask=query_mask, mapping_mask=mapping_mask)
+        if attn_prior is not None:
+            attn_prior = attn_prior.repeat(n_head, 1, 1)
+        output, attns, attn_logprob = self.attention(
+            q, k, v, key_mask=key_mask, query_mask=query_mask, mapping_mask=mapping_mask, attn_prior=attn_prior)
 
         output = output.view(n_head, sz_b, len_q, d_v)
         output = (
@@ -594,9 +596,10 @@ class WordToPhonemeAttention(nn.Module):
         # output = self.layer_norm(output)
 
         if indivisual_attn:
-            attn = attn.view(n_head, sz_b, len_q, len_k)
+            attns = tuple([attn.view(n_head, sz_b, len_q, len_k) for attn in attns])
+            attn_logprob = attn_logprob.view(n_head, sz_b, 1, len_q, len_k)
 
-        return output, attn
+        return output, attns, attn_logprob
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -604,20 +607,26 @@ class ScaledDotProductAttention(nn.Module):
         super(ScaledDotProductAttention, self).__init__()
         self.temperature = temperature
         self.softmax = nn.Softmax(dim=2)
+        self.log_softmax = torch.nn.LogSoftmax(dim=2)
 
-    def forward(self, q, k, v, key_mask=None, query_mask=None, mapping_mask=None):
+    def forward(self, q, k, v, key_mask=None, query_mask=None, mapping_mask=None, attn_prior=None):
 
         attn = torch.bmm(q, k.transpose(1, 2))
         attn = attn / self.temperature
 
         if key_mask is not None:
-            attn = attn.masked_fill(key_mask==0., -np.inf)
+            attn = attn.masked_fill(key_mask == 0., -np.inf)
+        if attn_prior is not None:
+            attn = self.log_softmax(attn) + torch.log(attn_prior.transpose(1, 2) + 1e-8)
+        attn_logprob = attn.unsqueeze(1).clone()
+
         attn = self.softmax(attn)
 
         if query_mask is not None:
             attn = attn * query_mask
+        attn_raw = attn.clone()
         if mapping_mask is not None:
             attn = attn * mapping_mask
         output = torch.bmm(attn, v)
 
-        return output, attn
+        return output, (attn, attn_raw), attn_logprob

@@ -89,7 +89,7 @@ for some preparations.
 
 For the forced alignment, [Montreal Forced Aligner](https://montreal-forced-aligner.readthedocs.io/en/latest/) (MFA) is used to obtain the alignments between the utterances and the phoneme sequences.
 Pre-extracted alignments for the datasets are provided [here](https://drive.google.com/drive/folders/1fizpyOiQ1lG2UDaMlXnT3Ll4_j6Xwg7K?usp=sharing). 
-You have to unzip the files in `preprocessed_data/DATASET/TextGrid/`. Alternately, you can [run the aligner by yourself](https://montreal-forced-aligner.readthedocs.io/en/latest/aligning.html).
+You have to unzip the files in `preprocessed_data/DATASET/TextGrid/`. Alternately, you can [run the aligner by yourself](https://montreal-forced-aligner.readthedocs.io/en/latest/user_guide/workflows/index.html).
 
 After that, run the preprocessing script by
 ```
@@ -116,15 +116,25 @@ tensorboard --logdir output/log
 to serve TensorBoard on your localhost.
 The loss curves, synthesized mel-spectrograms, and audios are shown.
 
-![](./img/tensorboard_loss.png)
+<!-- ![](./img/tensorboard_loss.png)
 ![](./img/tensorboard_spec.png)
-![](./img/tensorboard_audio.png)
+![](./img/tensorboard_audio.png) -->
 
 # Notes
 
 - For vocoder, **HiFi-GAN** and **MelGAN** are supported.
-- Speed ​​up the convergence of word-to-phoneme alignment in **LinguisticEncoder** by dividing long words into subwords and sorting the dataset by mel-spectrogram frame length.
 - No ReLU activation and LayerNorm in **VariationalGenerator** to avoid mashed output.
+- Speed ​​up the convergence of word-to-phoneme alignment in **LinguisticEncoder** by dividing long words into subwords and sorting the dataset by mel-spectrogram frame length.
+- There are two kinds of helper loss to improve word-to-phoneme alignment: "ctc" and "dga". You can toggle them as follows:
+    ```yaml
+    # In the train.yaml
+    aligner:
+        helper_type: "ctc" # ["ctc", "dga", "none"]
+    ```
+    - "ctc": [Connectionist Temporal Classification (CTC)](https://dl.acm.org/doi/pdf/10.1145/1143844.1143891) Loss with forward-sum algorithm
+    - "dga": [Diagonal Guided Attention (DGA)](https://arxiv.org/abs/1710.08969) Loss
+    - The default setting is "ctc". If you set "none", no helper loss will be applied during training.
+
 - Will be extended to a **multi-speaker TTS**.
 <!-- - Two options for embedding for the **multi-speaker TTS** setting: training speaker embedder from scratch or using a pre-trained [philipperemy's DeepSpeaker](https://github.com/philipperemy/deep-speaker) model (as [STYLER](https://github.com/keonlee9420/STYLER) did). You can toggle it by setting the config (between `'none'` and `'DeepSpeaker'`).
 - DeepSpeaker on VCTK dataset shows clear identification among speakers. The following figure shows the T-SNE plot of extracted speaker embedding.
@@ -141,3 +151,5 @@ Please cite this repository by the "[Cite this repository](https://github.blog/2
 - [jaywalnut310's VITS](https://github.com/jaywalnut310/vits)
 - [jaywalnut310's Glow-TTS](https://github.com/jaywalnut310/glow-tts)
 - [keonlee9420's VAENAR-TTS](https://github.com/keonlee9420/VAENAR-TTS)
+- [keonlee9420's Comprehensive-Transformer-TTS](https://github.com/keonlee9420/Comprehensive-Transformer-TTS) (CTC Loss)
+- [keonlee9420's Comprehensive-Tacotron2](https://github.com/keonlee9420/Comprehensive-Tacotron2) (DGA Loss)

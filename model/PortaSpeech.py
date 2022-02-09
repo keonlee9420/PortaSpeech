@@ -13,11 +13,11 @@ from .postnet import FlowPostNet
 class PortaSpeech(nn.Module):
     """ PortaSpeech """
 
-    def __init__(self, preprocess_config, model_config):
+    def __init__(self, preprocess_config, model_config, train_config):
         super(PortaSpeech, self).__init__()
         self.model_config = model_config
 
-        self.linguistic_encoder = LinguisticEncoder(model_config)
+        self.linguistic_encoder = LinguisticEncoder(model_config, train_config)
         self.variational_generator = VariationalGenerator(
             preprocess_config, model_config)
         self.postnet = FlowPostNet(preprocess_config, model_config)
@@ -53,6 +53,7 @@ class PortaSpeech(nn.Module):
         src_w_lens,
         max_src_w_len,
         spker_embeds=None,
+        attn_priors=None,
         mels=None,
         mel_lens=None,
         max_mel_len=None,
@@ -74,6 +75,7 @@ class PortaSpeech(nn.Module):
             mel_lens,
             mel_masks,
             alignments,
+            alignment_logprobs,
         ) = self.linguistic_encoder(
             texts,
             src_lens,
@@ -83,6 +85,7 @@ class PortaSpeech(nn.Module):
             src_w_masks,
             mel_masks,
             max_mel_len,
+            attn_priors,
             d_targets,
             d_control,
         )
@@ -129,4 +132,5 @@ class PortaSpeech(nn.Module):
             dist_info,
             src_w_masks,
             residual,
+            alignment_logprobs,
         )

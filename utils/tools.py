@@ -25,7 +25,7 @@ def get_configs_of(dataset):
 
 
 def to_device(data, device):
-    if len(data) == 14:
+    if len(data) == 15:
         (
             ids,
             raw_texts,
@@ -37,6 +37,7 @@ def to_device(data, device):
             src_w_lens,
             max_src_w_len,
             spker_embeds,
+            attn_priors,
             mels,
             mel_lens,
             max_mel_len,
@@ -50,6 +51,7 @@ def to_device(data, device):
         src_w_lens = torch.from_numpy(src_w_lens).to(device)
         if spker_embeds is not None:
             spker_embeds = torch.from_numpy(spker_embeds).float().to(device)
+        attn_priors = torch.from_numpy(attn_priors).float().to(device)
         mels = torch.from_numpy(mels).float().to(device)
         mel_lens = torch.from_numpy(mel_lens).to(device)
         durations = torch.from_numpy(durations).long().to(device)
@@ -65,6 +67,7 @@ def to_device(data, device):
             src_w_lens,
             max_src_w_len,
             spker_embeds,
+            attn_priors,
             mels,
             mel_lens,
             max_mel_len,
@@ -116,6 +119,7 @@ def log(
         logger.add_scalar("Loss/kl_loss", losses[2], step)
         logger.add_scalar("Loss/pn_loss", losses[3], step)
         logger.add_scalar("Loss/dur_loss", losses[4], step)
+        logger.add_scalar("Loss/helper_loss", losses[5], step)
 
     if fig is not None:
         logger.add_figure(tag, fig)
@@ -155,9 +159,9 @@ def synth_one_sample(model, targets, predictions, vocoder, model_config, preproc
     basename = targets[0][0]
     src_len = predictions[6][0].item()
     mel_len = predictions[7][0].item()
-    alignment = predictions[8][:, 0, :mel_len,
+    alignment = predictions[8][0][:, 0, :mel_len,
                                :src_len].float().detach().transpose(-2, -1)
-    mel_target = targets[10][0, :mel_len].float().detach().transpose(0, 1)
+    mel_target = targets[11][0, :mel_len].float().detach().transpose(0, 1)
     mel_mask = predictions[5][0, :mel_len].unsqueeze(0).detach()
     mel_reconst_vg = predictions[0][0,
                                     :mel_len].float().detach()
@@ -363,6 +367,13 @@ def pad_2D(inputs, maxlen=None):
         output = np.stack([pad(x, max_len) for x in inputs])
 
     return output
+
+
+def pad_3D(inputs, B, T, L):
+    inputs_padded = np.zeros((B, T, L), dtype=np.float32)
+    for i, input_ in enumerate(inputs):
+        inputs_padded[i, :np.shape(input_)[0], :np.shape(input_)[1]] = input_
+    return inputs_padded
 
 
 def pad(input_ele, mel_max_length=None):

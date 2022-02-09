@@ -6,7 +6,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 from text import text_to_sequence
-from utils.tools import pad_1D, pad_2D
+from utils.tools import pad_1D, pad_2D, pad_3D
 
 
 class Dataset(Dataset):
@@ -60,6 +60,12 @@ class Dataset(Dataset):
             "spker_embed",
             "{}-spker_embed.npy".format(speaker),
         )) if self.load_spker_embed else None
+        attn_prior_path = os.path.join(
+            self.preprocessed_path,
+            "attn_prior",
+            "{}-attn_prior-{}.npy".format(speaker, basename),
+        )
+        attn_prior = np.load(attn_prior_path)
 
         sample = {
             "id": basename,
@@ -70,6 +76,7 @@ class Dataset(Dataset):
             "duration": duration,
             "word_boundary": phones_per_word,
             "spker_embed": spker_embed,
+            "attn_prior": attn_prior,
         }
 
         return sample
@@ -100,6 +107,7 @@ class Dataset(Dataset):
         word_boundaries = [data[idx]["word_boundary"] for idx in idxs]
         spker_embeds = np.concatenate(np.array([data[idx]["spker_embed"] for idx in idxs]), axis=0) \
             if self.load_spker_embed else None
+        attn_priors = [data[idx]["attn_prior"] for idx in idxs]
 
         text_w_lens = np.array([word_boundary.shape[0]
                                for word_boundary in word_boundaries])
@@ -111,6 +119,7 @@ class Dataset(Dataset):
         mels = pad_2D(mels)
         durations = pad_1D(durations)
         word_boundaries = pad_1D(word_boundaries)
+        attn_priors = pad_3D(attn_priors, len(idxs), max(text_lens), max(mel_lens))
 
         return (
             ids,
@@ -123,6 +132,7 @@ class Dataset(Dataset):
             text_w_lens,
             max(text_w_lens),
             spker_embeds,
+            attn_priors,
             mels,
             mel_lens,
             max(mel_lens),

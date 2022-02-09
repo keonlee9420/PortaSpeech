@@ -4,9 +4,9 @@ dist_config:
   dist_url: "tcp://localhost:80000"
   world_size: 1
 path:
-  ckpt_path: "./output/ckpt/LJSpeech_fixing"
-  log_path: "./output/log/LJSpeech_fixing"
-  result_path: "./output/result/LJSpeech_fixing"
+  ckpt_path: "./output/ckpt/LJSpeech"
+  log_path: "./output/log/LJSpeech"
+  result_path: "./output/result/LJSpeech"
 optimizer:
   batch_size: 64
   betas: [0.9, 0.98]
@@ -15,11 +15,19 @@ optimizer:
   grad_clip_thresh: 1.0
   grad_acc_step: 1
   warm_up_step: 4000
-  anneal_steps: [175000, 250000, 300000]
+  anneal_steps: [200000]
   anneal_rate: 0.3
 step:
-  total_step: 500000
+  total_step: 200000
   log_step: 100
   synth_step: 1000
   val_step: 1000
-  save_step: 25000
+  save_step: 20000
+  ctc_step: 1000
+aligner:
+  helper_type: "dga" # ["dga", "ctc", "none"]
+  ctc_weight_start: 1.0
+  ctc_weight_end: 1.0
+  guided_sigma: 0.4
+  guided_lambda: 1.0
+  guided_weight: 1.0
