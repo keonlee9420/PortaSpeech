@@ -116,9 +116,13 @@ tensorboard --logdir output/log
 to serve TensorBoard on your localhost.
 The loss curves, synthesized mel-spectrograms, and audios are shown.
 
-<!-- ![](./img/tensorboard_loss.png)
+## Normal Model
+![](./img/tensorboard_loss.png)
 ![](./img/tensorboard_spec.png)
-![](./img/tensorboard_audio.png) -->
+![](./img/tensorboard_audio.png)
+
+## Small Model Loss
+![](./img/tensorboard_loss_small.png)
 
 # Notes
 
@@ -129,12 +133,17 @@ The loss curves, synthesized mel-spectrograms, and audios are shown.
     ```yaml
     # In the train.yaml
     aligner:
-        helper_type: "ctc" # ["ctc", "dga", "none"]
+        helper_type: "dga" # ["dga", "ctc", "none"]
     ```
-    - "ctc": [Connectionist Temporal Classification (CTC)](https://dl.acm.org/doi/pdf/10.1145/1143844.1143891) Loss with forward-sum algorithm
     - "dga": [Diagonal Guided Attention (DGA)](https://arxiv.org/abs/1710.08969) Loss
-    - The default setting is "ctc". If you set "none", no helper loss will be applied during training.
-
+    - "ctc": [Connectionist Temporal Classification (CTC)](https://dl.acm.org/doi/pdf/10.1145/1143844.1143891) Loss with forward-sum algorithm
+    - If you set "none", no helper loss will be applied during training.
+    - The alignments comparision of three methods ("dga", "ctc", and "none" from top to bottom):
+        ![](./img/val_attn_step_125000_LJ040-0055_dga.png)
+        ![](./img/val_attn_step_125000_LJ040-0055_ctc.png)
+        ![](./img/val_attn_step_125000_LJ040-0055_none.png)
+    - The default setting is "dga". Although "ctc" makes the strongest alignment, the output quality and the accuracy are worse than "dga".
+    - But still, there is a room for the improvement of output quality. The audio quality and the alingment (accuracy) seem to be a trade-off.
 - Will be extended to a **multi-speaker TTS**.
 <!-- - Two options for embedding for the **multi-speaker TTS** setting: training speaker embedder from scratch or using a pre-trained [philipperemy's DeepSpeaker](https://github.com/philipperemy/deep-speaker) model (as [STYLER](https://github.com/keonlee9420/STYLER) did). You can toggle it by setting the config (between `'none'` and `'DeepSpeaker'`).
 - DeepSpeaker on VCTK dataset shows clear identification among speakers. The following figure shows the T-SNE plot of extracted speaker embedding.
