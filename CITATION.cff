@@ -5,7 +5,7 @@ authors:
   given-names: "Keon"
   orcid: "https://orcid.org/0000-0001-9028-1018"
 title: "PortaSpeech"
-version: 0.1.0
+version: 0.2.0
 doi: 10.5281/zenodo.5575261
-date-released: 2021-10-08
+date-released: 2022-02-17
 url: "https://github.com/keonlee9420/PortaSpeech"
